@@ -1,0 +1,1 @@
+from .sdxl_clevr import main # for dora

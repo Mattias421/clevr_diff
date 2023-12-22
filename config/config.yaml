@@ -1,0 +1,4 @@
+dora:
+  dir: outputs/clevr_diff/
+
+model: sdxl_turbo
