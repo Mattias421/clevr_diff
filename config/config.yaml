@@ -1,4 +1,28 @@
 dora:
   dir: outputs/clevr_diff/
+  exclude: ['slurm', 'data.path']
 
 model: sdxl_turbo
+
+pipe:
+  height: 512
+  width: 512
+  reconstruct: false
+  guidance_scale: 0.0
+  ll_guidance_scale: 0.0
+  num_inference_steps: 4
+
+ode_options:
+  num_inference_steps: 4
+  atol: 1e-5
+  rtol: 1e-5
+  method: euler
+
+ll_ode_options:
+  num_inference_steps: 4
+  atol: 1e-3
+  rtol: 1e-3
+  method: dopri5
+
+data:
+  path: /store/store4/data/clevr/single_object/images
