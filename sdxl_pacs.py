@@ -43,28 +43,32 @@ def main(cfg):
     ll_ode_options = cfg.ll_ode_options
     ode_options = cfg.ode_options
 
-    colours = ['red', 'green', 'blue', 'brown', 'yellow', 'gray', 'purple', 'cyan']
-    shapes = ['sphere', 'cube', 'cylinder']
+    classes = ['dog', 'elephant', 'giraffe', 'guitar', 'horse', 'house', 'person']
+    domains = ['art_painting', 'cartoon', 'photo', 'sketch']
 
     dataset_path = cfg.data.path 
 
-    prompt = 'a picture of a {obj}'
+    df = pd.read_csv(f'{dataset_path}/manifest.csv')
 
-    for colour in colours:
-        for shape in shapes:
+    prompt = 'a {domain} of a {obj}'
+
+    for class_ in classes:
+        for domain in domains:
             
-            obj = f'{colour} {shape}'
+            obj = class_
 
-            print(f'obj: {obj}')
+            logger.info(f'obj: {obj}')
 
-            file = f'CLEVR_new_large_{colour}_metal_{shape}000001.png'
-            img = Image.open(f'{dataset_path}/{file}').convert('RGB')
+            file = df[(df['domain'] == domain) & (df['class'] == class_)]['image'].values[0]
+            img = Image.open(file).convert('RGB')
 
-            # confound colours
+            # confound classes
 
-            prompts = [prompt.format(obj=f'{c}{shape}') for c in colours]
+            domain_name = 'painting' if domain == 'art_painting' else domain
 
-            colour_ll_results = pipeline(prompts=prompts,
+            prompts = [prompt.format(obj=c, domain=domain_name) for c in classes]
+
+            class_ll_results = pipeline(prompts=prompts,
                                         images=img,
                                         height=cfg.pipe.height, width=cfg.pipe.width,
                                         reconstruct=cfg.pipe.reconstruct,
@@ -76,11 +80,11 @@ def main(cfg):
                                         generator=generator,
                                         return_image=False)
             
-            # confound shapes
+            # confound domain
 
-            prompts = [prompt.format(obj=f'{colour}{s}') for s in shapes]
+            prompts = [prompt.format(obj=class_, domain='painting' if d == 'art_painting' else d) for d in domains]
 
-            shape_ll_results = pipeline(prompts=prompts,
+            domain_ll_results = pipeline(prompts=prompts,
                                         images=img,
                                         height=cfg.pipe.height, width=cfg.pipe.width,
                                         reconstruct=cfg.pipe.reconstruct,
@@ -92,14 +96,16 @@ def main(cfg):
                                         generator=generator,
                                         return_image=False)
             
-            colour_ll = colour_ll_results['log_likelihood'].tolist()
-            shape_ll = shape_ll_results['log_likelihood'].tolist()
+            class_ll = class_ll_results['log_likelihood'].tolist()
+            domain_ll = domain_ll_results['log_likelihood'].tolist()
 
             # make new results dict
-            results = {'colour':colour, 'shape':shape,
-                       'll_red':colour_ll[0], 'll_blue':colour_ll[1], 'll_green':colour_ll[2],
-                       'll_gray':colour_ll[5], 'll_brown':colour_ll[3], 'll_yellow':colour_ll[4], 'll_purple':colour_ll[6], 'll_cyan':colour_ll[7],
-                       'll_sphere':shape_ll[0], 'll_cube':shape_ll[1], 'll_cylinder':shape_ll[2],}
+            results = {'class': class_, 'domain': domain}
+
+            for i, c in enumerate(classes):
+                results[f'll_{c}'] = class_ll[i]
+            for i, d in enumerate(domains):
+                results[f'll_{d}'] = domain_ll[i] 
 
             xp.link.push_metrics(results)
             logger.info(results.values())
