@@ -12,10 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from scipy.stats import rankdata, spearmanr
 from . import mean_reciprocal_rank
-
-
     
 def plot_confusion(df, xp):
     classes = df['class'].unique()
@@ -143,6 +140,8 @@ def explorer(launcher):
     })
 
     sub = launcher.bind({'model':'sdxl',
+                        'full_determinism':False,
+                        'n_repeats':50,
                         'pipe':pipe_options,
                         'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
                         'dora.dir':'outputs/sdxl_pacs',
@@ -161,10 +160,10 @@ def explorer(launcher):
                 'ode_options':ode_options,
                 'll_ode_options':ode_options,})
 
-            turbo_sub({'pipe':{'guidance_scale':guidance_scale,
-                        'reconstruct':reconstruct,
-                        'll_guidance_scale':guidance_scale,
-                        },
-                'ode_options':ode_options,
-                'll_ode_options':ode_options,})
+            # turbo_sub({'pipe':{'guidance_scale':guidance_scale,
+            #             'reconstruct':reconstruct,
+            #             'll_guidance_scale':guidance_scale,
+            #             },
+            #     'ode_options':ode_options,
+            #     'll_ode_options':ode_options,})
          

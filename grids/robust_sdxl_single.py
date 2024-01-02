@@ -16,7 +16,6 @@ from scipy.stats import rankdata, spearmanr
 from . import mean_reciprocal_rank
 
 
-    
 def plot_confusion(df, xp):
     colours = df['colour'].unique()
     shapes = df['shape'].unique()
@@ -112,6 +111,8 @@ def explorer(launcher):
                    'method':'dopri5'
                    }   
     sub = launcher.bind({'model':'sdxl',
+                        'full_determinism':False,
+                        'n_repeats':50,
                         'pipe':pipe_options,
                         'data.path':'/mnt/parscratch/users/acq22mc/data/clevr/single_object/images'
     })
