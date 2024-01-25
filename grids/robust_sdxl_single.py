@@ -13,51 +13,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from scipy.stats import rankdata, spearmanr
-from . import mean_reciprocal_rank
+from . import plot_confusion_clevr as plot_confusion
 
-
-def plot_confusion(df, xp):
-    colours = df['colour'].unique()
-    shapes = df['shape'].unique()
-
-    colour_matrix = np.zeros((len(colours), len(colours)))
-
-    for i, colour in enumerate(colours):
-        row = df[df['colour'] == colour][[f'll_{c}' for c in colours]].mean(axis=0)
-        colour_matrix[i] = row.to_list()
-
-    shape_matrix = np.zeros((len(shapes), len(shapes)))
-
-    for i, shape in enumerate(shapes):
-        row = df[df['shape'] == shape][[f'll_{s}' for s in shapes]].mean(axis=0)
-        shape_matrix[i] = row.to_list()
-
-    # compute mean reciprocal rank
-    colour_mrr, colour_acc = mean_reciprocal_rank(colour_matrix)
-    shape_mrr, shape_acc = mean_reciprocal_rank(shape_matrix)
-
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    sns.heatmap(colour_matrix, ax=ax[0], cmap='jet')
-    sns.heatmap(shape_matrix, ax=ax[1], cmap='jet')
-
-    # Label x and y ticks for the first heatmap
-    ax[0].set_xticks(np.arange(len(colours)) + 0.5)
-    ax[0].set_yticks(np.arange(len(colours)) + 0.5)
-    ax[0].set_xticklabels(colours)
-    ax[0].set_yticklabels(colours)
-
-    # Label x and y ticks for the second heatmap
-    ax[1].set_xticks(np.arange(len(shapes))+0.5)
-    ax[1].set_yticks(np.arange(len(shapes))+0.5)
-    ax[1].set_xticklabels(shapes)
-    ax[1].set_yticklabels(shapes)
-
-    ax[0].set_title('colour')
-    ax[1].set_title('shape')
-    plt.tight_layout()
-    plt.savefig(str(xp.folder) + '/loglikelihoods.png')
-
-    return colour_mrr, shape_mrr, colour_acc, shape_acc
 
 class MyExplorer(Explorer):
 
@@ -71,15 +28,15 @@ class MyExplorer(Explorer):
                     tt.leaf('Shape', '.4f')])
                 ]
 
-    def process_sheep(self, sheep, history: List[dict]) -> dict:
+    def process_sheep(self, sheep, history: List[dict], use_maximum_likelihood=False) -> dict:
         if history == []:
             return {}
         
         df = pd.DataFrame(history)
 
-        colour_mrr, shape_mrr, colour_acc, shape_acc = plot_confusion(df, sheep.xp)
+        colour_mrr, shape_mrr, colour_acc, shape_acc = plot_confusion(df, sheep.xp, use_maximum_likelihood=use_maximum_likelihood)
 
-        latex = True
+        latex = False 
 
         if latex:
             args = dict(sheep.xp.delta)
@@ -112,13 +69,13 @@ def explorer(launcher):
                    }   
     sub = launcher.bind({'model':'sdxl',
                         'full_determinism':False,
-                        'n_repeats':50,
+                        'n_repeats':15,
                         'pipe':pipe_options,
                         'data.path':'/mnt/parscratch/users/acq22mc/data/clevr/single_object/images'
     })
 
     with launcher.job_array():
-        for guidance_scale, tol, reconstruct in product([0.0, 3.0, 5.0, 7.0], [1e-3, 1e-5], [True, False]):
+        for guidance_scale, tol, reconstruct in product([0.0, 3.0, 5.0, 7.0], [1e-3], [True, False]):
             ode_options['atol'] = tol
             ode_options['rtol'] = tol
 

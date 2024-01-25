@@ -61,45 +61,15 @@ def explorer(launcher):
               srun_args=['--export=ALL'],
               time=3*24*60,)
 
-    pipe_options = {'height':1024, 'width':1024, 
-                    'num_inference_steps':50}
-    ode_options = {'num_inference_steps':50,
-                   'atol':1e-3,
-                   'rtol':1e-3,
-                   'method':'dopri5'
-                   }
-    turbo_pipe_options = {'height':512, 'width':512, 
-                    'num_inference_steps':4}
-    turbo_sub = launcher.bind({'model':'sdxl_turbo',
-                        'pipe':turbo_pipe_options,
+
+    sub = launcher.bind({'model':'clip',
+                        'n_repeats':20,
                         'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
-                        'dora.dir':'outputs/sdxl_pacs',
-                        '+data.name':'pacs',
-    })
+                        'dora.dir':'outputs/clip'
+                        })
 
-    sub = launcher.bind({'model':'sdxl',
-                        'pipe':pipe_options,
-                        'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
-                        'dora.dir':'outputs/sdxl_pacs',
-                        '+data.name':'pacs',
-    })
 
-    with launcher.job_array():
-        for guidance_scale, tol, reconstruct in product([0.0, 3.0, 5.0, 7.0], [1e-3, 1e-5], [True, False]):
-            ode_options['atol'] = tol
-            ode_options['rtol'] = tol
+    sub({'+data.name':'pacs'})
 
-            sub({'pipe':{'guidance_scale':guidance_scale,
-                        'reconstruct':reconstruct,
-                        'll_guidance_scale':guidance_scale,
-                        },
-                'ode_options':ode_options,
-                'll_ode_options':ode_options,})
-
-            turbo_sub({'pipe':{'guidance_scale':guidance_scale,
-                        'reconstruct':reconstruct,
-                        'll_guidance_scale':guidance_scale,
-                        },
-                'ode_options':ode_options,
-                'll_ode_options':ode_options,})
+    sub({'+data.name':'clevr'})
          

@@ -3,6 +3,9 @@ dora:
   exclude: ['slurm', 'data.path']
 
 model: sdxl_turbo
+n_repeats: 1
+full_determinism: false
+cublas_workspace_config: :16:8
 
 pipe:
   height: 512

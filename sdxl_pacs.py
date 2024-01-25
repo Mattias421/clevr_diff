@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 @hydra_main(version_base=None, config_path='config', config_name='config')
 def main(cfg):
-    full_determinism = False
+    full_determinism = cfg.full_determinism
+
+    if full_determinism:
+        logger.info('Running with full determinism')
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = cfg.cublas_workspace_config
 
     os.environ['PYTHONHASHSEED'] = str(0)
     np.random.seed(0)
@@ -36,9 +40,9 @@ def main(cfg):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
     if cfg.model == 'sdxl_turbo':
-        pipeline = TurboPipe(device, use_fp16=True)
+        pipeline = TurboPipe(device, use_fp16=(not cfg.full_determinism))
     elif cfg.model == 'sdxl':
-        pipeline = Pipe(device, use_fp16=True)
+        pipeline = Pipe(device, use_fp16=(not cfg.full_determinism))
 
     ll_ode_options = cfg.ll_ode_options
     ode_options = cfg.ode_options
@@ -52,63 +56,65 @@ def main(cfg):
 
     prompt = 'a {domain} of a {obj}'
 
-    for class_ in classes:
-        for domain in domains:
-            
-            obj = class_
 
-            logger.info(f'obj: {obj}')
+    for i in range(cfg.n_repeats):
+        for class_ in classes:
+            for domain in domains:
+                
+                obj = class_
 
-            file = df[(df['domain'] == domain) & (df['class'] == class_)]['image'].values[0]
-            img = Image.open(file).convert('RGB')
+                logger.info(f'obj: {obj}')
 
-            # confound classes
+                file = df[(df['domain'] == domain) & (df['class'] == class_)]['image'].values[i]
+                img = Image.open(file).convert('RGB')
 
-            domain_name = 'painting' if domain == 'art_painting' else domain
+                # confound classes
 
-            prompts = [prompt.format(obj=c, domain=domain_name) for c in classes]
+                domain_name = 'painting' if domain == 'art_painting' else domain
 
-            class_ll_results = pipeline(prompts=prompts,
-                                        images=img,
-                                        height=cfg.pipe.height, width=cfg.pipe.width,
-                                        reconstruct=cfg.pipe.reconstruct,
-                                        guidance_scale=cfg.pipe.guidance_scale,
-                                        ll_guidance_scale=cfg.pipe.ll_guidance_scale,
-                                        ll_ode_options=ll_ode_options,
-                                        reconstruct_ode_options=ode_options,
-                                        num_inference_steps=cfg.pipe.num_inference_steps,
-                                        generator=generator,
-                                        return_image=False)
-            
-            # confound domain
+                prompts = [prompt.format(obj=c, domain=domain_name) for c in classes]
 
-            prompts = [prompt.format(obj=class_, domain='painting' if d == 'art_painting' else d) for d in domains]
+                class_ll_results = pipeline(prompts=prompts,
+                                            images=img,
+                                            height=cfg.pipe.height, width=cfg.pipe.width,
+                                            reconstruct=cfg.pipe.reconstruct,
+                                            guidance_scale=cfg.pipe.guidance_scale,
+                                            ll_guidance_scale=cfg.pipe.ll_guidance_scale,
+                                            ll_ode_options=ll_ode_options,
+                                            reconstruct_ode_options=ode_options,
+                                            num_inference_steps=cfg.pipe.num_inference_steps,
+                                            generator=generator,
+                                            return_image=False)
+                
+                # confound domain
 
-            domain_ll_results = pipeline(prompts=prompts,
-                                        images=img,
-                                        height=cfg.pipe.height, width=cfg.pipe.width,
-                                        reconstruct=cfg.pipe.reconstruct,
-                                        guidance_scale=cfg.pipe.guidance_scale,
-                                        ll_guidance_scale=cfg.pipe.ll_guidance_scale,
-                                        ll_ode_options=ll_ode_options,
-                                        reconstruct_ode_options=ode_options,
-                                        num_inference_steps=cfg.pipe.num_inference_steps,
-                                        generator=generator,
-                                        return_image=False)
-            
-            class_ll = class_ll_results['log_likelihood'].tolist()
-            domain_ll = domain_ll_results['log_likelihood'].tolist()
+                prompts = [prompt.format(obj=class_, domain='painting' if d == 'art_painting' else d) for d in domains]
 
-            # make new results dict
-            results = {'class': class_, 'domain': domain}
+                domain_ll_results = pipeline(prompts=prompts,
+                                            images=img,
+                                            height=cfg.pipe.height, width=cfg.pipe.width,
+                                            reconstruct=cfg.pipe.reconstruct,
+                                            guidance_scale=cfg.pipe.guidance_scale,
+                                            ll_guidance_scale=cfg.pipe.ll_guidance_scale,
+                                            ll_ode_options=ll_ode_options,
+                                            reconstruct_ode_options=ode_options,
+                                            num_inference_steps=cfg.pipe.num_inference_steps,
+                                            generator=generator,
+                                            return_image=False)
+                
+                class_ll = class_ll_results['log_likelihood'].tolist()
+                domain_ll = domain_ll_results['log_likelihood'].tolist()
 
-            for i, c in enumerate(classes):
-                results[f'll_{c}'] = class_ll[i]
-            for i, d in enumerate(domains):
-                results[f'll_{d}'] = domain_ll[i] 
+                # make new results dict
+                results = {'class': class_, 'domain': domain}
 
-            xp.link.push_metrics(results)
-            logger.info(results.values())
+                for i, c in enumerate(classes):
+                    results[f'll_{c}'] = class_ll[i]
+                for i, d in enumerate(domains):
+                    results[f'll_{d}'] = domain_ll[i] 
+
+                xp.link.push_metrics(results)
+                logger.info(results.values())
             
 
             

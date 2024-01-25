@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 @hydra_main(version_base=None, config_path='config', config_name='config')
 def main(cfg):
-    full_determinism = False
+    full_determinism = cfg.full_determinism
+
+    if full_determinism:
+        logger.info('Running with full determinism')
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = cfg.cublas_workspace_config
 
     os.environ['PYTHONHASHSEED'] = str(0)
     np.random.seed(0)
@@ -36,9 +40,9 @@ def main(cfg):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
     if cfg.model == 'sdxl_turbo':
-        pipeline = TurboPipe(device, use_fp16=True)
+        pipeline = TurboPipe(device, use_fp16=(not cfg.full_determinism))
     elif cfg.model == 'sdxl':
-        pipeline = Pipe(device, use_fp16=True)
+        pipeline = Pipe(device, use_fp16=(not cfg.full_determinism))
 
     ll_ode_options = cfg.ll_ode_options
     ode_options = cfg.ode_options
@@ -50,62 +54,66 @@ def main(cfg):
 
     prompt = 'a picture of a {obj}'
 
-    for colour in colours:
-        for shape in shapes:
-            
-            obj = f'{colour} {shape}'
+    for i in range(cfg.n_repeats):
+        for colour in colours:
+            for shape in shapes:
+                
+                obj = f'{colour} {shape}'
 
-            print(f'obj: {obj}')
+                print(f'obj: {obj}')
 
-            file = f'CLEVR_new_large_{colour}_metal_{shape}000001.png'
-            img = Image.open(f'{dataset_path}/{file}').convert('RGB')
+                number = str(i+1).zfill(6)
 
-            # confound colours
+                file = f'CLEVR_new_large_{colour}_metal_{shape}{number}.png'
+                img = Image.open(f'{dataset_path}/{file}').convert('RGB')
 
-            prompts = [prompt.format(obj=f'{c}{shape}') for c in colours]
+                # confound colours
 
-            colour_ll_results = pipeline(prompts=prompts,
-                                        images=img,
-                                        height=cfg.pipe.height, width=cfg.pipe.width,
-                                        reconstruct=cfg.pipe.reconstruct,
-                                        guidance_scale=cfg.pipe.guidance_scale,
-                                        ll_guidance_scale=cfg.pipe.ll_guidance_scale,
-                                        ll_ode_options=ll_ode_options,
-                                        reconstruct_ode_options=ode_options,
-                                        num_inference_steps=cfg.pipe.num_inference_steps,
-                                        generator=generator,
-                                        return_image=False)
-            
-            # confound shapes
+                prompts = [prompt.format(obj=f'{c}{shape}') for c in colours]
 
-            prompts = [prompt.format(obj=f'{colour}{s}') for s in shapes]
+                colour_ll_results = pipeline(prompts=prompts,
+                                            images=img,
+                                            height=cfg.pipe.height, width=cfg.pipe.width,
+                                            reconstruct=cfg.pipe.reconstruct,
+                                            guidance_scale=cfg.pipe.guidance_scale,
+                                            ll_guidance_scale=cfg.pipe.ll_guidance_scale,
+                                            ll_ode_options=ll_ode_options,
+                                            reconstruct_ode_options=ode_options,
+                                            num_inference_steps=cfg.pipe.num_inference_steps,
+                                            generator=generator,
+                                            return_image=False)
+                
+                # confound shapes
 
-            shape_ll_results = pipeline(prompts=prompts,
-                                        images=img,
-                                        height=cfg.pipe.height, width=cfg.pipe.width,
-                                        reconstruct=cfg.pipe.reconstruct,
-                                        guidance_scale=cfg.pipe.guidance_scale,
-                                        ll_guidance_scale=cfg.pipe.ll_guidance_scale,
-                                        ll_ode_options=ll_ode_options,
-                                        reconstruct_ode_options=ode_options,
-                                        num_inference_steps=cfg.pipe.num_inference_steps,
-                                        generator=generator,
-                                        return_image=False)
-            
-            colour_ll = colour_ll_results['log_likelihood'].tolist()
-            shape_ll = shape_ll_results['log_likelihood'].tolist()
+                prompts = [prompt.format(obj=f'{colour}{s}') for s in shapes]
 
-            # make new results dict
-            results = {'colour':colour, 'shape':shape,
-                       'll_red':colour_ll[0], 'll_blue':colour_ll[1], 'll_green':colour_ll[2],
-                       'll_gray':colour_ll[5], 'll_brown':colour_ll[3], 'll_yellow':colour_ll[4], 'll_purple':colour_ll[6], 'll_cyan':colour_ll[7],
-                       'll_sphere':shape_ll[0], 'll_cube':shape_ll[1], 'll_cylinder':shape_ll[2],}
+                shape_ll_results = pipeline(prompts=prompts,
+                                            images=img,
+                                            height=cfg.pipe.height, width=cfg.pipe.width,
+                                            reconstruct=cfg.pipe.reconstruct,
+                                            guidance_scale=cfg.pipe.guidance_scale,
+                                            ll_guidance_scale=cfg.pipe.ll_guidance_scale,
+                                            ll_ode_options=ll_ode_options,
+                                            reconstruct_ode_options=ode_options,
+                                            num_inference_steps=cfg.pipe.num_inference_steps,
+                                            generator=generator,
+                                            return_image=False)
+                
+                colour_ll = colour_ll_results['log_likelihood'].tolist()
+                shape_ll = shape_ll_results['log_likelihood'].tolist()
 
-            xp.link.push_metrics(results)
-            logger.info(results.values())
-            
+                # make new results dict
+                results = {'colour':colour, 'shape':shape,
+                        'll_red':colour_ll[0], 'll_blue':colour_ll[1], 'll_green':colour_ll[2],
+                        'll_gray':colour_ll[5], 'll_brown':colour_ll[3], 'll_yellow':colour_ll[4], 'll_purple':colour_ll[6], 'll_cyan':colour_ll[7],
+                        'll_sphere':shape_ll[0], 'll_cube':shape_ll[1], 'll_cylinder':shape_ll[2],
+                        'number':number}
 
-            
+                xp.link.push_metrics(results)
+                logger.info(results.values())
+                
+
+                
 
 
 
