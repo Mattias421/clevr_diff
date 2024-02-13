@@ -12,40 +12,44 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from scipy.stats import rankdata, spearmanr
-from . import plot_confusion_clevr as plot_confusion
-
-
+from . import plot_confusion_pacs as plot_confusion 
+    
 class MyExplorer(Explorer):
 
     def get_grid_metrics(self) -> List[_Node]:
         return [
-                tt.group('MRR', [
-                    tt.leaf('Colour', '.4f'),
-                    tt.leaf('Shape', '.4f')]),
-                tt.group('Accuracy', [
-                    tt.leaf('Colour', '.4f'),
-                    tt.leaf('Shape', '.4f')])
+                tt.group(key, [
+                    tt.leaf('ll', '.4f'),
+                    tt.leaf('fid', '.4f'),
+                    tt.leaf('clip', '.4f'),])
+                for key in ['init', 'half', 'final', 'ref']
                 ]
+    
+    def bpd(self, ll):
+        return -ll * np.log2(np.exp(1)) / (3 * 1024 * 1024)
 
-    def process_sheep(self, sheep, history: List[dict], use_maximum_likelihood=True) -> dict:
+    def process_sheep(self, sheep, history: List[dict]) -> dict:
         if history == []:
             return {}
+
+        print(history)
         
-        df = pd.DataFrame(history)
+        metrics = {}
 
-        colour_mrr, shape_mrr, colour_acc, shape_acc = plot_confusion(df, sheep.xp, use_maximum_likelihood=use_maximum_likelihood)
+        keys = ['init', 'half', 'final', 'ref']
 
-        latex = False 
+        for key in keys:
+            df = pd.DataFrame([h[key] for h in history])
 
-        if latex:
-            args = dict(sheep.xp.delta)
-            tol = 1e-3 if 'll_ode_options.atol' not in args.keys() else args['ll_ode_options.atol']
-            guidance_scale = 0.0 if 'pipe.guidance_scale' not in args.keys() else args['pipe.guidance_scale']
-            print(f'{tol} & {guidance_scale} && {colour_mrr:.4f} & {shape_mrr:.4f} && {colour_acc:.4f} & {shape_acc:.4f} \\\\')
+            df['ll'] = df['ll'].map(self.bpd)
 
-        return {'MRR': {'Colour': colour_mrr, 'Shape': shape_mrr},
-                'Accuracy': {'Colour': colour_acc, 'Shape': shape_acc}}
+            metrics[key] = {'ll': df['ll'].mean(),
+                            'fid': df['fid'].mean(),
+                            'clip': df['clip'].mean()}
+        
+        return metrics
+        
+
 
 @MyExplorer
 def explorer(launcher):
@@ -66,12 +70,16 @@ def explorer(launcher):
                    'atol':1e-3,
                    'rtol':1e-3,
                    'method':'dopri5'
-                   }   
+                   }
+
     sub = launcher.bind({'model':'sdxl',
                         'full_determinism':False,
-                        'n_repeats':15,
+                        'n_repeats':20, # currently small for speed testing
                         'pipe':pipe_options,
-                        'data.path':'/mnt/parscratch/users/acq22mc/data/clevr/single_object/images'
+                        'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
+                        'dora.dir':'outputs/sdxl_pacs',
+                        '+data.name':'pacs',
+                        '+task':'sample_ll',
     })
 
     with launcher.job_array():
@@ -86,4 +94,5 @@ def explorer(launcher):
                         },
                 'ode_options':ode_options,
                 'll_ode_options':ode_options,})
+
          

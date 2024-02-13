@@ -26,7 +26,7 @@ class MyExplorer(Explorer):
                     tt.leaf('Domain', '.4f')])
                 ]
 
-    def process_sheep(self, sheep, history: List[dict], use_maximum_likelihood=False) -> dict:
+    def process_sheep(self, sheep, history: List[dict], use_maximum_likelihood=True) -> dict:
         if history == []:
             return {}
 
@@ -84,13 +84,14 @@ def explorer(launcher):
     })
 
     with launcher.job_array():
-        for guidance_scale, tol, reconstruct in product([0.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0], [1e-3], [True, False]):
+        for guidance_scale, tol, reconstruct in product([0.0, 3.0, 5.0, 7.0], [1e-3], [True, False]):
             ode_options['atol'] = tol
             ode_options['rtol'] = tol
 
             sub({'pipe':{'guidance_scale':guidance_scale,
                         'reconstruct':reconstruct,
                         'll_guidance_scale':guidance_scale,
+                         **pipe_options
                         },
                 'ode_options':ode_options,
                 'll_ode_options':ode_options,})

@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from scipy.stats import rankdata, spearmanr
-from . import plot_confusion_pacs as plot_confusion 
+from . import plot_confusion_pacs as plot_confusion_pacs
+from . import plot_confusion_clevr as plot_confusion_clevr 
 
 
     
@@ -35,7 +36,10 @@ class MyExplorer(Explorer):
 
         df = pd.DataFrame(history)
 
-        class_mrr, domain_mrr, class_acc, domain_acc = plot_confusion(df, sheep.xp, use_maximum_likelihood=use_maximum_likelihood)
+        if 'clevr' in sheep.xp.cfg.data.name:
+            class_mrr, domain_mrr, class_acc, domain_acc = plot_confusion_clevr(df, sheep.xp, use_maximum_likelihood=use_maximum_likelihood)
+        else:
+            class_mrr, domain_mrr, class_acc, domain_acc = plot_confusion_pacs(df, sheep.xp, use_maximum_likelihood=use_maximum_likelihood)
 
         latex = False
 
@@ -64,12 +68,14 @@ def explorer(launcher):
 
     sub = launcher.bind({'model':'clip',
                         'n_repeats':20,
-                        'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
                         'dora.dir':'outputs/clip'
                         })
 
 
-    sub({'+data.name':'pacs'})
+    sub({'+data.name':'pacs',
+         'data.path':'/mnt/parscratch/users/acq22mc/data/PACS',
+})
 
-    sub({'+data.name':'clevr'})
+    sub({'+data.name':'clevr',
+        'data.path':'/mnt/parscratch/users/acq22mc/data/clevr/single_object/images'})
          

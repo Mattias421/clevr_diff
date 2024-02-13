@@ -181,7 +181,7 @@ class LogLikelihoodPipeline():
 
 
 
-    def get_scheduler_params(self, scheduler, num_inference_steps, device):
+    def get_scheduler_params(self, scheduler, num_inference_steps, device, stage='final'):
         beta_start = scheduler.config.beta_start
         beta_end = scheduler.config.beta_end
         num_train_timesteps = scheduler.config.num_train_timesteps
@@ -221,7 +221,17 @@ class LogLikelihoodPipeline():
         # print(sigmas)
         # print(log_sigmas)
 
-        return sigmas[-2], sigmas[0], log_sigmas
+        if stage == 'init':
+            index = 1
+        elif stage == 'final':
+            index = -2
+        elif stage == 'half':
+            index = -int(len(sigmas) // 2)
+        elif stage == 'q1':
+            index = -int(len(sigmas) // 4)
+        elif stage == 'q3':
+            index = -int(len(sigmas) // (4/3))
+        return sigmas[index], sigmas[0], log_sigmas
 
     @torch.no_grad()
     def generate(self,
@@ -232,6 +242,7 @@ class LogLikelihoodPipeline():
         reconstruct_ode_options: Dict,
         num_inference_steps: int,
         generator,
+        stage='final',
         ):
         original_size = (height, width)
         target_size = (height, width)
@@ -273,7 +284,8 @@ class LogLikelihoodPipeline():
         add_text_embeds = pooled_prompt_embeds
         crops_coords_top_left = (0, 0)
         add_time_ids = self.pipe._get_add_time_ids(
-            original_size, crops_coords_top_left, target_size, dtype=prompt_embeds.dtype
+            original_size, crops_coords_top_left, target_size, dtype=prompt_embeds.dtype,
+            text_encoder_projection_dim=self.pipe.text_encoder_2.config.projection_dim
         )
 
 
@@ -287,7 +299,10 @@ class LogLikelihoodPipeline():
         add_time_ids = add_time_ids.to(self.device).repeat(batch_size, 1)
 
         # prepare scheduler params
-        sigma_min, sigma_max, log_sigmas = self.get_scheduler_params(self.pipe.scheduler, num_inference_steps, self.device)
+        sigma_min, sigma_max, log_sigmas = self.get_scheduler_params(self.pipe.scheduler, 
+                                                                     num_inference_steps, 
+                                                                     self.device, 
+                                                                     stage=stage)
 
         # prepare added cond kwargs
         added_cond_kwargs = {'text_embeds': add_text_embeds, 'time_ids': add_time_ids}
